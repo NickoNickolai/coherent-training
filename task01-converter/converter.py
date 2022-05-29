@@ -12,14 +12,19 @@ def createParser():
     """
     usage = "converter.py [--csv2parquet | --parquet2csv <src-filename> <dst-filename>] | [--get-schema <filename>] | [--help]"
     description = "Convert csv-file to parquet-file or vice versa. Show the schema of the file specified."
-    parser = argparse.ArgumentParser(usage=usage, description=description, add_help=False)
+    parser = argparse.ArgumentParser(
+        usage=usage, description=description, add_help=False)
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument("--csv2parquet", nargs=2, metavar='', help="convert csv src-file to parquet dst-file")
-    group.add_argument("--parquet2csv", nargs=2, metavar='', help="convert parquet src-file to csv dst-file")
+    group.add_argument("--csv2parquet", nargs=2, metavar='',
+                       help="convert csv src-file to parquet dst-file")
+    group.add_argument("--parquet2csv", nargs=2, metavar='',
+                       help="convert parquet src-file to csv dst-file")
 
-    parser.add_argument("--get-schema", nargs=1, metavar='', help="print the file schema")
-    parser.add_argument("--help", action='store_true', help="show this help message and exit")
+    parser.add_argument("--get-schema", nargs=1, metavar='',
+                        help="print the file schema")
+    parser.add_argument("--help", action='store_true',
+                        help="show this help message and exit")
 
     return parser
 
@@ -42,22 +47,17 @@ def parquet2csv(src, dst, encoding='utf-8'):
 
 def get_schema(file):
     """
-    Print to console the schema of the `file` specified.
+    Print to console the schema of the `file` specified. Filetype is detected by extension.
     """
-    # Assume input file is csv
     try:
-        df = pd.read_csv(file)
-    except OSError:
-        raise
-    except BaseException:
-        # Assume input file is parquet
-        try:
+        if re.search(r"\.csv$", file):
+            df = pd.read_csv(file)
+        elif re.search(r"\.parq(uet)?$", file):
             df = pd.read_parquet(file)
-        except OSError:
-            raise
-        except BaseException:
-            # Input file neither csv nor parquet - it is unknown
+        else:
             raise Exception("Unknown file format")
+    except:
+        raise
     schema = re.split("\ndtype:", str(df.dtypes))[0]
     sys.stdout.write(schema)
 
