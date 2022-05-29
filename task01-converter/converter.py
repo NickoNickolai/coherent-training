@@ -44,18 +44,22 @@ def get_schema(file):
     """
     Print to console the schema of the `file` specified.
     """
+    # Assume input file is csv
     try:
         df = pd.read_csv(file)
-    except (FileNotFoundError, PermissionError):
+    except OSError:
         raise
-    except BaseException as e:
+    except BaseException:
+        # Assume input file is parquet
         try:
             df = pd.read_parquet(file)
-        except (FileNotFoundError, PermissionError):
+        except OSError:
             raise
-        except BaseException as e:
+        except BaseException:
+            # Input file neither csv nor parquet - it is unknown
             raise Exception("Unknown file format")
-    print(re.split("\ndtype:", str(df.dtypes))[0])
+    schema = re.split("\ndtype:", str(df.dtypes))[0]
+    sys.stdout.write(schema)
 
 
 def main():
@@ -73,11 +77,11 @@ def main():
         elif args.get_schema:
             get_schema(args.get_schema[0])
         else:
-            parser.print_help()
-    except (FileNotFoundError, PermissionError) as e:
-        print(f"FileError: {e}")
+            sys.stdout.write(parser.format_help())
+    except OSError as e:
+        sys.stderr.write(f"FileError: {e}")
     except BaseException as e:
-        print(f"Exception: {e}")
+        sys.stderr.write(f"Exception: {e}")
 
 
 if __name__ == '__main__':
