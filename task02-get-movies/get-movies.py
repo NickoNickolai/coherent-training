@@ -1,18 +1,44 @@
 """
 Pure python utility to get top n movies by each genre from csv data.
-Output has csv-like format, to the stdout.
-Source files specified in the script.
+Outputs to the stdout in csv-like format: (genre, title, year, rating).
+Source filepaths specified in config file.
 """
 
 import argparse
+import configparser
 import csv
-import os
 import re
 import sys
 from collections import deque
 
-ratings_fpath = os.path.join("data", "ratings.csv")
-movies_fpath = os.path.join("data", "movies.csv")
+# Global config
+config = {}
+
+
+def configure():
+    """
+    Extract script settings from config file into a global `config`.
+    """
+    parser = configparser.ConfigParser()
+    parser.read('config.ini')
+
+    global config
+
+    try:
+        config['movies_fpath'] = parser.get('Source', 'movies_path')
+        config['ratings_fpath'] = parser.get('Source', 'ratings_path')
+        config['src_encoding'] = parser.get('Source', 'encoding')
+        config['src_delimiter'] = parser.get('Source', 'delimiter')
+
+        config['dst_encoding'] = parser.get('Destination', 'encoding')
+        config['dst_delimiter'] = parser.get('Destination', 'delimiter')
+        config['write_schema'] = int(parser.get('Destination', 'write_schema'))
+
+        config['title_regexp'] = parser.get('Settings', 'title_regexp')
+        config['no_genres_regexp'] = parser.get('Settings', 'no_genres_regexp')
+    except Exception:
+        sys.stderr.write("Exception: corrupted config file")
+        sys.exit(-1)
 
 
 def create_parser():
@@ -38,16 +64,20 @@ def calc_avg_rating():
     Calculate average rating from ratings csv-file.
     Return average rating storage: { movieId: avg_rating }
     """
-    with open(ratings_fpath) as ratings_file:
-        reader = csv.DictReader(ratings_file)
+    with open(config['ratings_fpath'], encoding=config['src_encoding']) as ratings_file:
+        reader = csv.DictReader(ratings_file, delimiter=config['src_delimiter'])
 
         # Raw ratings storage: { movieId: { total, count } }
         rating_storage = {}
 
         for row in reader:
-            # Extract rating values
-            movieId = int(row['movieId'])
-            rating = float(row['rating'])
+            try:
+                # Extract rating values
+                movieId = int(row['movieId'])
+                rating = float(row['rating'])
+            except KeyError:
+                sys.stderr.write("KeyError: failed to extract data")
+                sys.exit(-1)
 
             # Store current row rating
             if movieId in rating_storage:
@@ -71,7 +101,7 @@ def split_title(raw_title):
     Split raw title string into the real title and year.
     """
     raw_title = raw_title.strip()
-    re_result = re.search(r"(.+) \((\d{4})\)", raw_title)
+    re_result = re.search(config['title_regexp'], raw_title)
     try:
         title = re_result.groups()[0]
         year = int(re_result.groups()[1])
@@ -86,7 +116,8 @@ def split_genres(raw_genres):
     Split raw genres string into the genres list.
     """
     raw_genres = raw_genres.strip()
-    if raw_genres != '(no genres listed)':
+    re_result = re.search(config['no_genres_regexp'], raw_genres)
+    if not re_result:
         return raw_genres.split('|')
     else:
         raise Exception
@@ -99,8 +130,8 @@ def extract_movies():
     """
     rating_storage = calc_avg_rating()
 
-    with open(movies_fpath) as movies_file:
-        reader = csv.DictReader(movies_file)
+    with open(config['movies_fpath'], encoding=config['src_encoding']) as movies_file:
+        reader = csv.DictReader(movies_file, delimiter=config['src_delimiter'])
 
         # Movies storage: [ { movieId, title, year, genre, rating } ]
         # List type chosen because of next sorting
@@ -133,7 +164,11 @@ def filter_movies(filters):
     """
     Store movies filtered with `filters`.
     """
-    movies_storage = extract_movies()
+    try:
+        movies_storage = extract_movies()
+    except Exception as e:
+        sys.stderr.write(f"Exception: {e}")
+        sys.exit(-1)
 
     # Group by genre, sort by rating DESC, year DESC, title ASC (in reversed order)
     # Built-in sort works much faster than implemented with pure python cycles, but requies additional memory
@@ -210,8 +245,10 @@ def filter_movies(filters):
 
 def main():
     """
-    Entry point: create args parser and process target.
+    Entry point: configure script, get CLI args and process target.
     """
+    configure()
+
     parser = create_parser()
     args = vars(parser.parse_args(sys.argv[1:]))
 
@@ -240,11 +277,16 @@ def main():
     except BaseException as e:
         sys.stderr.write(f"Exception: {e}\n")
 
-    result = filter_movies(filters)
-    writer = csv.DictWriter(sys.stdout, ['genre', 'title', 'year', 'rating'])
+    found_movies = filter_movies(filters)
 
-    # Echo data found
-    for row in result:
+    headers = ['genre', 'title', 'year', 'rating']
+    writer = csv.DictWriter(sys.stdout, headers, delimiter=config['dst_delimiter'])
+
+    if config['write_schema']:
+        writer.writeheader()
+
+    # Output the found data
+    for row in found_movies:
         writer.writerow(row)
 
 
