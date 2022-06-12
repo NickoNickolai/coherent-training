@@ -18,16 +18,17 @@ All options are optional.
 
 ## Usage
 
-```
+```sh
 get-movies.py [--N <number>] | [--genres <list>] | [--year_from <year>] | [--year_to <year>] | [--regexp <regular-expression>] | [--help]
 ```
+
 All filters can be combined in any combination.
 Output is always grouped by genre and sorted by rating DESC, year DESC, title ASC. 
 
 ## Examples
 
 Get all movies for each genre:
-```
+```sh
 get-movies.py
 
 genre,title,year,rating
@@ -40,7 +41,7 @@ Action,Superman/Batman: Public Enemies,2009,5.0
 ```
 
 Get 3 top rated movies for both "Sci-Fi" and "War" genres:
-```
+```sh
 get-movies.py --N 3 --genres "Sci-Fi|War"
 
 genre,title,year,rating
@@ -53,18 +54,17 @@ War,Che: Part Two,2008,5.0
 ```
 
 Get 3 top rated movies with title containing "the" or "The" for "Sci-Fi" genre released from 1999 to 2000 year:
-```
+```sh
 get-movies.py --N 3 --regexp ".[Tt]he " --genre "Sci-Fi" --year_from 1999 --year_to 2000
 
 genre,title,year,rating
 Sci-Fi,Batman Beyond: Return of the Joker,2000,3.5
 Sci-Fi,Star Wars: Episode I - The Phantom Menace,1999,3.107142857142857
 Sci-Fi,Universal Soldier: The Return,1999,2.625
-...
 ```
 
 Show help message:
-```
+```sh
 convert.py --help
 ```
 
@@ -91,7 +91,13 @@ Source files should be downloaded from [grouplens.org](https://grouplens.org/dat
 
 - [MovieLens Latest Dataset (small)](https://files.grouplens.org/datasets/movielens/ml-latest-small.zip)
 - [MovieLens Latest Dataset](https://files.grouplens.org/datasets/movielens/ml-latest.zip)
-or
 - [MovieLens 25M Dataset](https://files.grouplens.org/datasets/movielens/ml-25m.zip)
 
 Example files included in the **data/** directory.
+
+### Download utility
+
+Usage of the additional shell utilitiy to automatically download source files:
+```sh
+setup.sh --ds small|medium|stable
+```
