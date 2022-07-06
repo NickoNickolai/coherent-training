@@ -1,1 +1,3 @@
-create database if not exists movielens;
+drop database if exists movielens;
+
+create database movielens;

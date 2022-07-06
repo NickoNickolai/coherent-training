@@ -2,7 +2,7 @@
 
 Python/MySQL utility to get top n movies by each genre from csv-data.
 Outputs to the stdout in csv-like format: (genre, title, year, rating).
-Source filepaths specified in config file.
+Source files should be loaded into MySQL database.
 
 ## Structure
 
@@ -26,8 +26,8 @@ Select top n of the most rated movies.
 options:
   --N           quantity of the most rated movies
   --genres      genres filter
-  --year_from   start year
-  --year_to     end year
+  --year_from   start year filter
+  --year_to     end year filter
   --regexp      regexp filter
   --help        show this help message and exit
 ```
@@ -76,11 +76,6 @@ Set the working directory to `client/` and execute:
     Sci-Fi,Universal Soldier: The Return,1999,2.625
     ```
 
-- Show help message:
-    ```sh
-    > python get-movies.py --help
-    ```
-
 ## Dependencies
 
 - [mysql-connector-python](https://pypi.org/project/mysql/) - MySQL driver written in Python.
@@ -99,6 +94,7 @@ Configuration file **config.ini** should be stored next to the script. It should
 - **host** — database host name 
 - **user** — database user name
 - **password** — database user password
+- **proc_get_top_n_movies** — name of the MySQL stored procedure to call
 
 ## Requirements
 
@@ -132,19 +128,26 @@ To load data set the working directory to `server/landing/` and execute:
 ```
 ### Landing configuration
 
+Configuration file **config.ini** should be stored next to the script. It should contain sections:
+
 #### [db]
 - **database** — MySQL database name
 - **host** — database host name 
 - **user** — database user name
 - **password** — database user password
+
 #### [Source]
 - **movies_path** — input movies.csv filepath
 - **ratings_path** — input ratings.csv filepath
 - **encoding** — input files encoding
 - **delimiter** — input files delimiter
+
 #### [Destination]
 - **movies_tbl** — name of the landing table for movies
 - **ratings_tbl** — name of the landing table for ratings
+
+#### [Settings]
+- **chunk_size** — number of csv-rows to be loaded by single query
 
 ## Database
 

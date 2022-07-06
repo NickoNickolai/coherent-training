@@ -35,6 +35,8 @@ def configure():
 
         config['movies_tbl'] = parser.get('Destination', 'movies_tbl')
         config['ratings_tbl'] = parser.get('Destination', 'ratings_tbl')
+
+        config['chunk_size'] = int(parser.get('Settings', 'chunk_size'))
     except Exception as e:
         sys.stderr.write(f"Exception: corrupted config file: {e}")
         sys.exit(1)
@@ -56,18 +58,42 @@ def land_movies():
     with open(config['movies_fpath'], encoding=config['src_encoding']) as f:
         reader = csv.DictReader(f, delimiter=config['src_delimiter'])
 
+        print("Load movies")
+
+        chunk_counter = 0
+        chunk_string_list = []
+        chunk_values_list = []
+
+        query_head = f"insert into {config['movies_tbl']} (movieId, title, genres) values "
+
         for i, row in enumerate(reader):
             movieId = row['movieId']
             title = row['title']
             genres = row['genres']
 
-            sql = f"insert into {config['movies_tbl']} (movieId, title, genres) values (%s, %s, %s)"
-            val = (movieId, title, genres)
+            chunk_string_list.append("(%s, %s, %s)")
+            chunk_values_list.extend([movieId, title, genres])
 
-            cursor.execute(sql, val)
-            connection.commit()
+            if chunk_counter < config['chunk_size'] - 1:
+                chunk_counter += 1
+            else:   
+                query = query_head + ','.join(chunk_string_list)
 
-            print(f"Record {i} inserted")
+                cursor.execute(query, chunk_values_list)
+                connection.commit()
+
+                chunk_counter = 0
+                chunk_string_list = []
+                chunk_values_list = []
+
+                print(f"{i+1} records inserted")
+
+        query = query_head + ','.join(chunk_string_list)
+
+        cursor.execute(query, chunk_values_list)
+        connection.commit()
+
+        print(f"{i+1} records inserted")
 
     cursor.close()
     connection.close()
@@ -89,18 +115,36 @@ def land_ratings():
     with open(config['ratings_fpath'], encoding=config['src_encoding']) as f:
         reader = csv.DictReader(f, delimiter=config['src_delimiter'])
 
+        print("Load ratings")
+
+        chunk_counter = 0
+        chunk_values_list = []
+
+        query_head = f"insert into {config['ratings_tbl']} (movieId, rating) values "
+
         for i, row in enumerate(reader):
 
             movieId = row['movieId']
             rating = row['rating']
 
-            sql = f"insert into {config['ratings_tbl']} (movieId, rating) values (%s, %s)"
-            val = (movieId, rating)
+            chunk_values_list.append(f"({movieId}, {rating})")
 
-            cursor.execute(sql, val)
-            connection.commit()
+            if chunk_counter < config['chunk_size'] - 1:
+                chunk_counter += 1
+            else:   
+                query = query_head + ','.join(chunk_values_list)
+                chunk_counter = 0
+                chunk_values_list = []
 
-            print(f"Record {i} inserted")
+                cursor.execute(query)
+                connection.commit()
+
+                print(f"{i+1} records inserted")
+        
+        query = query_head + ','.join(chunk_values_list)
+        cursor.execute(query)
+        connection.commit()
+        print(f"{i+1} records inserted")
 
     cursor.close()
     connection.close()
@@ -115,7 +159,7 @@ def main():
     # Load movies.csv
     land_movies()
 
-    #  Load ratings.csv
+    # Load ratings.csv
     land_ratings()
 
 

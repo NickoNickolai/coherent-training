@@ -1,6 +1,8 @@
 use movielens;
 
-create table if not exists dst_movies(
+drop table if exists dst_movies;
+
+create table dst_movies(
     id int not null primary key auto_increment,
     movieId int not null,
     title varchar(255) not null,
