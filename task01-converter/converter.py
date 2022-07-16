@@ -1,19 +1,21 @@
-#!/usr/bin/python3
+"""Convert csv-file to parquet-file or vice versa. Show the schema of the file specified."""
 
 import argparse
 import re
 import sys
-import pandas as pd
+
+import pyarrow.csv as csv
+import pyarrow.parquet as pq
+
+BLOCK_SIZE = 1e6
 
 
-def createParser():
+def create_parser():
     """
-    CLI arguments parser.
+    Create CLI arguments parser.
     """
     usage = "converter.py [--csv2parquet | --parquet2csv <src-filename> <dst-filename>] | [--get-schema <filename>] | [--help]"
-    description = "Convert csv-file to parquet-file or vice versa. Show the schema of the file specified."
-    parser = argparse.ArgumentParser(
-        usage=usage, description=description, add_help=False)
+    parser = argparse.ArgumentParser(usage=usage, description=__doc__, add_help=False)
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--csv2parquet", nargs=2, metavar='',
@@ -29,59 +31,78 @@ def createParser():
     return parser
 
 
-def csv2parquet(src, dst, encoding='utf-8'):
+def csv2parquet(src_file, dst_file):
     """
-    Convert `src` csv-file to `dst` parquet-file. For csv-file `encoding` param is available.
+    Convert `src_file` csv-file to `dst_file` parquet-file.
     """
-    df = pd.read_csv(src, encoding=encoding)
-    df.to_parquet(dst, index=False)
+    # Setup csv-file reader
+    read_options = csv.ReadOptions(block_size=BLOCK_SIZE)
+    csv_reader = csv.open_csv(src_file, read_options=read_options)
+
+    # Write parquet-file by batches
+    with pq.ParquetWriter(dst_file, csv_reader.schema) as pq_writer:
+        for batch in csv_reader:
+            pq_writer.write_batch(batch)
 
 
-def parquet2csv(src, dst, encoding='utf-8'):
+def parquet2csv(src_file, dst_file):
     """
-    Convert `src` parquet-file to `dst` csv-file. For csv-file `encoding` param is available.
+    Convert `src_file` parquet-file to `dst_file` csv-file.
     """
-    df = pd.read_parquet(src)
-    df.to_csv(dst, index=False, encoding=encoding)
+    # Setup parquet-file reader
+    pq_reader = pq.ParquetFile(src_file)
+
+    # Write csv-file by batches
+    with csv.CSVWriter(dst_file, pq_reader.schema_arrow) as csv_writer:
+        for batch in pq_reader.iter_batches():
+            csv_writer.write_batch(batch)
 
 
-def get_schema(file):
+def get_schema(src_file):
     """
-    Print to console the schema of the `file` specified. Filetype is detected by extension.
+    Get the schema of the `file` specified. Filetype is detected by extension.
     """
     try:
-        if re.search(r"\.csv$", file):
-            df = pd.read_csv(file)
-        elif re.search(r"\.parq(uet)?$", file):
-            df = pd.read_parquet(file)
+        if re.search(r"\.csv$", src_file):
+            schema = csv.open_csv(src_file).schema
+        elif re.search(r"\.parq(uet)?$", src_file):
+            schema = pq.ParquetFile(src_file).schema_arrow
         else:
             raise Exception("Unknown file format")
     except:
         raise
-    schema = re.split("\ndtype:", str(df.dtypes))[0]
-    sys.stdout.write(schema)
+
+    return schema.to_string()
 
 
 def main():
     """
     Entry point: create args parser and process target.
     """
-    parser = createParser()
-    args = parser.parse_args(sys.argv[1:])
+    arg_parser = create_parser()
+    args = arg_parser.parse_args()
 
     try:
         if args.csv2parquet:
-            csv2parquet(args.csv2parquet[0], args.csv2parquet[1])
+            src_file, dst_file = args.csv2parquet
+            csv2parquet(src_file, dst_file)
+
         elif args.parquet2csv:
-            parquet2csv(args.parquet2csv[0], args.parquet2csv[1])
+            src_file, dst_file = args.parquet2csv
+            parquet2csv(src_file, dst_file)
+
         elif args.get_schema:
-            get_schema(args.get_schema[0])
+            src_file, = args.get_schema
+            schema = get_schema(src_file)
+            print(schema, file=sys.stdout)
+
         else:
-            sys.stdout.write(parser.format_help())
+            print(arg_parser.format_help(), file=sys.stdout)
+
     except OSError as e:
-        sys.stderr.write(f"FileError: {e}")
-    except BaseException as e:
-        sys.stderr.write(f"Exception: {e}")
+        print(f"FileError: {e}", file=sys.stderr)
+    except Exception as e:
+        print(f"Exception: {e}", file=sys.stderr)
 
 
 if __name__ == '__main__':

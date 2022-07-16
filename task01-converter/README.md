@@ -1,44 +1,56 @@
 # Converter
 
-A simple csv/parquet console app converter.
-Can convert csv-file to parquet-file or vice versa and show the schema of the file specified.
+Convert csv-file to parquet-file or vice versa. Show the schema of the file specified.
 
+## Requirements
 
-## Options
+The utility requires [**`python3`**](https://www.python.org/downloads/) interpreter with [**`pip`**](https://pypi.org/project/pip/) installing tool.
 
-- **--csv2parquet** *<src-filename> <dst-filename>* — convert csv src-file to parquet dst-file.
-- **--parquet2csv** *<src-filename> <dst-filename>* — convert parquet src-file to csv dst-file.
-- **--get-schema** *<filename>* — print the file schema.
-- **--help** — show this help message and exit.
+On the command line the interpreter can be typed as `python`, `python3`, `py` (depending on OS, version, etc.).
 
-## Usage
-
-Convert csv to parquet:
-```
-convert.py --csv2parquet <src-filename> <dst-filename>
-```
-
-Convert parquet to csv:
-```
-convert.py --parquet2csv <src-filename> <dst-filename>
-```
-
-Get file schema:
-```
-convert.py --get-schema <filename>
-```
-
-Show help message:
-```
-convert.py --help
-```
+To be specific this readme has decided to use the interpreter name `python` in the examples.
 
 ## Dependencies
 
-- [pandas](https://pandas.pydata.org) - pandas is a fast, powerful, flexible and easy to use open source data analysis and manipulation tool, built on top of the Python programming language.
-- [pyarrow](https://arrow.apache.org/docs/python/index.html) - Python API for Arrow and the leaf libraries that add additional functionality such as reading Apache Parquet files into Arrow structures.
+All extra packages listed in the `requirements.txt`:
 
-Libraries installation:
+- [**`pyarrow`**](https://arrow.apache.org/docs/python/index.html) `8.0.0` — Python API for Arrow and the leaf libraries that add additional functionality such as reading Apache Parquet files into Arrow structures.
+
+To install extra packages automatically set the working directory to the project root and execute:
+
+```sh
+> python -m pip install -r requirements.txt
 ```
-python -m pip install -r requirements.txt
+
+## Usage
+
+To show help message below use `--help` argument.
+
+```sh
+usage: converter.py [--csv2parquet | --parquet2csv <src-filename> <dst-filename>] | [--get-schema <filename>] | [--help]
+
+Convert csv-file to parquet-file or vice versa. Show the schema of the file specified.
+
+options:
+  --csv2parquet    convert csv src-file to parquet dst-file
+  --parquet2csv    convert parquet src-file to csv dst-file
+  --get-schema     print the file schema
+  --help           show this help message and exit
 ```
+
+## Examples
+
+- Convert csv-file to parquet-file:
+  ```sh
+  > python converter.py --csv2parquet <src-filename> <dst-filename>
+  ```
+
+- Convert parquet-file to csv-file:
+  ```sh
+  > python converter.py --parquet2csv <src-filename> <dst-filename>
+  ```
+
+- Get file schema:
+  ```sh
+  > python converter.py --get-schema <filename>
+  ```
