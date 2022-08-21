@@ -8,6 +8,7 @@ import argparse
 import configparser
 import csv
 import sys
+from collections import deque
 
 import mysql.connector
 
@@ -16,7 +17,7 @@ config = {}
 
 def configure():
     """
-    Extract script settings from config file into a variable.
+    Extract script settings from config file into a global `config`.
     """
     parser = configparser.ConfigParser()
     parser.read('config.ini')
@@ -29,60 +30,38 @@ def configure():
         config['user'] = parser.get('db', 'user')
         config['password'] = parser.get('db', 'password')
         config['proc_get_top_n_movies'] = parser.get('db', 'proc_get_top_n_movies')
+
+        config['dst_encoding'] = parser.get('Destination', 'encoding')
+        config['dst_delimiter'] = parser.get('Destination', 'delimiter')
+        config['write_schema'] = int(parser.get('Destination', 'write_schema'))
     except Exception:
-        sys.stderr.write("Exception: corrupted config file")
-        sys.exit(1)
+        raise Exception("corrupted config file")
 
 
 def create_parser():
     """
-    Create configured parser for CLI arguments.
+    Return configured parser for CLI arguments.
     """
-    usage = "get-movies.py [--N <number>] | [--genres <list>] | [--year_from <year>] | [--year_to <year>] | [--regexp <regular-expression>] | [--help]"
-    description = "Select top n of the most rated movies."
-    parser = argparse.ArgumentParser(usage=usage, description=description, add_help=False)
+    parser = argparse.ArgumentParser(description=__doc__, add_help=False)
 
-    parser.add_argument("--N", metavar='', help="quantity of the most rated movies")
-    parser.add_argument("--genres", metavar='', help="genres filter")
-    parser.add_argument("--year_from", metavar='', help="start year")
-    parser.add_argument("--year_to", metavar='', help="end year")
-    parser.add_argument("--regexp", metavar='', help="regexp filter")
-    parser.add_argument("--help", action='store_true', help="show this help message and exit")
+    parser.add_argument("--N", metavar="<number>", help="top rated movies count for each genre")
+    parser.add_argument("--genres", metavar="<list>", help="genres filter, list separated by '|'")
+    parser.add_argument("--year_from", metavar="<year>", help="year-from  filter")
+    parser.add_argument("--year_to", metavar="<year>", help="year-to  filter")
+    parser.add_argument("--regexp", metavar="<regexp>", help="regexp filter for title")
+    parser.add_argument("--help", action="store_true", help="show this help message and exit")
 
     return parser
 
 
-def main():
+def filter_movies(filters):
     """
-    Entry point: configure script, get CLI args and process target.
+    Filter movies by `filters` dictionary.
+    Return filtered movies list.
     """
-    configure()
-
-    parser = create_parser()
-    args = vars(parser.parse_args(sys.argv[1:]))
-
-    filters = {'N': None,
-               'genres': None,
-               'year_from': None,
-               'year_to': None,
-               'regexp': None}
-
-    try:
-        if args['help']:
-            sys.stdout.write(parser.format_help())
-            sys.exit(0)
-        if args['N'] is not None:
-            filters['N'] = int(args['N'])
-        if args['genres'] is not None:
-            filters['genres'] = args['genres']
-        if args['year_from'] is not None:
-            filters['year_from'] = int(args['year_from'])
-        if args['year_to'] is not None:
-            filters['year_to'] = int(args['year_to'])
-        if args['regexp'] is not None:
-            filters['regexp'] = args['regexp']
-    except Exception as e:
-        sys.stderr.write(f"Exception: {e}\n")
+    connection = None
+    cursor = None
+    found_movies = deque()
 
     try:
         connection = mysql.connector.connect(
@@ -95,22 +74,85 @@ def main():
         cursor = connection.cursor(dictionary=True)
         cursor.callproc(config['proc_get_top_n_movies'], list(filters.values()))
 
-        headers = ['genre', 'title', 'year', 'rating']
-        writer = csv.DictWriter(sys.stdout, headers)
+        for cur in cursor.stored_results():
+            found_movies.extend(cur.fetchall())
 
+        return found_movies
+
+    except Exception:
+        raise
+
+    finally:
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.close()
+
+
+def print_movies(found_movies):
+    """
+    Print found movies in the csv-like format to stdout.
+    """
+    headers = ['genre', 'title', 'year', 'rating']
+    delimiter = config['dst_delimiter']
+    writer = csv.DictWriter(sys.stdout, headers,
+                            delimiter=delimiter,
+                            lineterminator='\n')
+
+    write_schema = config['write_schema']
+    if write_schema:
         writer.writeheader()
 
-        # Output the found data
-        for cur in cursor.stored_results():
-            found_movies = cur.fetchall()
-            for movie in found_movies:
-                writer.writerow(movie)
+    # Output the found data
+    for row in found_movies:
+        writer.writerow(row)
 
-    except mysql.connector.Error as e:
-        sys.stderr.write(f"MySQLError: {e}\n")
-    finally:
-        cursor.close()
-        connection.close()
+
+def main():
+    """
+    Entry point: configure script, get CLI args and process target.
+    """
+    # Set console encoding to UTF-8
+    sys.stdout.reconfigure(encoding='utf-8')
+
+    filters = {'N': None,
+               'genres': None,
+               'year_from': None,
+               'year_to': None,
+               'regexp': None}
+
+    try:
+        configure()
+
+        parser = create_parser()
+        args = vars(parser.parse_args())
+
+        if args['help']:
+            print(parser.format_help(), file=sys.stdout)
+            sys.exit(0)
+
+        if args['N'] is not None:
+            filters['N'] = int(args['N'])
+
+        if args['genres'] is not None:
+            filters['genres'] = args['genres']
+
+        if args['year_from'] is not None:
+            filters['year_from'] = int(args['year_from'])
+
+        if args['year_to'] is not None:
+            filters['year_to'] = int(args['year_to'])
+
+        if args['regexp'] is not None:
+            filters['regexp'] = args['regexp']
+
+        found_movies = filter_movies(filters)
+
+    except Exception as e:
+        print(f"Exception: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print_movies(found_movies)
 
 
 if __name__ == '__main__':

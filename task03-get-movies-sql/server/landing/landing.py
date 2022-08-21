@@ -1,7 +1,5 @@
 """
-Python/MySQL utility to get top n movies by each genre from csv data.
-Outputs to the stdout in csv-like format: (genre, title, year, rating).
-Source filepaths specified in config file.
+Utility for loading source data from csv-files to MySQL database.
 """
 
 import configparser
@@ -15,7 +13,7 @@ config = {}
 
 def configure():
     """
-    Extract script settings from config file into a variable.
+    Extract script settings from config file into a global `config`.
     """
     parser = configparser.ConfigParser()
     parser.read('config.ini')
@@ -36,15 +34,14 @@ def configure():
         config['movies_tbl'] = parser.get('Destination', 'movies_tbl')
         config['ratings_tbl'] = parser.get('Destination', 'ratings_tbl')
 
-        config['chunk_size'] = int(parser.get('Settings', 'chunk_size'))
-    except Exception as e:
-        sys.stderr.write(f"Exception: corrupted config file: {e}")
-        sys.exit(1)
+        config['chunk_size'] = int(parser.get('Loading', 'chunk_size'))
+    except Exception:
+        raise Exception("corrupted config file")
 
 
 def land_movies():
     """
-    Store data from movies.csv into the landing table.
+    Load movies data into the db landing lable.
     """
     connection = mysql.connector.connect(
         database=config['database'],
@@ -54,6 +51,8 @@ def land_movies():
     )
 
     cursor = connection.cursor()
+
+    cursor.execute(f"truncate {config['movies_tbl']}")
 
     with open(config['movies_fpath'], encoding=config['src_encoding']) as f:
         reader = csv.DictReader(f, delimiter=config['src_delimiter'])
@@ -76,7 +75,7 @@ def land_movies():
 
             if chunk_counter < config['chunk_size'] - 1:
                 chunk_counter += 1
-            else:   
+            else:
                 query = query_head + ','.join(chunk_string_list)
 
                 cursor.execute(query, chunk_values_list)
@@ -101,7 +100,7 @@ def land_movies():
 
 def land_ratings():
     """
-    Store data from ratings.csv into the landing table.
+    Load ratings data into the db landing lable.
     """
     connection = mysql.connector.connect(
         database=config['database'],
@@ -111,6 +110,8 @@ def land_ratings():
     )
 
     cursor = connection.cursor()
+
+    cursor.execute(f"truncate {config['ratings_tbl']}")
 
     with open(config['ratings_fpath'], encoding=config['src_encoding']) as f:
         reader = csv.DictReader(f, delimiter=config['src_delimiter'])
@@ -131,7 +132,7 @@ def land_ratings():
 
             if chunk_counter < config['chunk_size'] - 1:
                 chunk_counter += 1
-            else:   
+            else:
                 query = query_head + ','.join(chunk_values_list)
                 chunk_counter = 0
                 chunk_values_list = []
@@ -140,7 +141,7 @@ def land_ratings():
                 connection.commit()
 
                 print(f"{i+1} records inserted")
-        
+
         query = query_head + ','.join(chunk_values_list)
         cursor.execute(query)
         connection.commit()
@@ -154,13 +155,18 @@ def main():
     """
     Entry point: load data into the landing.
     """
-    configure()
+    try:
+        configure()
 
-    # Load movies.csv
-    land_movies()
+        # Load movies.csv
+        land_movies()
 
-    # Load ratings.csv
-    land_ratings()
+        # Load ratings.csv
+        land_ratings()
+
+    except Exception as e:
+        print(f"Exception: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
